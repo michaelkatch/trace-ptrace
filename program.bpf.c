@@ -16,6 +16,9 @@
 #define TASK_COMM_LEN 16
 #endif
 
+const char ptrace_request_names[5][32] = {"PTRACE_TRACEME", "PTRACE_PEEKTEXT",
+                                          "PTRACE_PEEKDATA", "PTRACE_PEEKUSER",
+                                          "PTRACE_POKETEXT"};
 struct event {
   gadget_timestamp timestamp;
   gadget_mntns_id mntns_id;
@@ -42,21 +45,14 @@ int tracepoint__sys_enter_ptrace(struct trace_event_raw_sys_enter *ctx) {
   if (!event)
     return 0;
 
-  const char *ptrace_request_names[] = {"PTRACE_TRACEME", "PTRACE_PEEKTEXT",
-                                        "PTRACE_PEEKDATA", "PTRACE_PEEKUSER",
-                                        "PTRACE_POKETEXT"};
-
-  // bpf_core_read_str(event->request_name, sizeof(event->request_name),
-  // ptrace_request_names[request_num]);
-  __builtin_memcpy(event->request_name, ptrace_request_names[request_num],
-                   sizeof(event->request_name));
-
   __u64 pid_tgid = bpf_get_current_pid_tgid();
   event->timestamp = bpf_ktime_get_boot_ns();
   event->mntns_id = gadget_get_mntns_id();
   event->pid = pid_tgid >> 32;
   event->target_pid = ctx->args[1];
   bpf_get_current_comm(&event->comm, sizeof(event->comm));
+  __builtin_memcpy(event->request_name, ptrace_request_names[request_num],
+                   sizeof(event->request_name));
 
   /* emit event */
   gadget_submit_buf(ctx, &events, event, sizeof(*event));
