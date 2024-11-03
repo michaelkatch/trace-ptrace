@@ -20,15 +20,17 @@ struct event {
   gadget_timestamp timestamp;
   gadget_mntns_id mntns_id;
   __u32 pid;
-  __u8 comm[TASK_COMM_LEN];
+  char comm[TASK_COMM_LEN];
+  char request_name[32];         // String representation of ptrace request
 };
+
 
 GADGET_TRACER_MAP(events, 1024 * 256);
 
-GADGET_TRACER(changeme_mytracer, events, event);
+GADGET_TRACER(ptrace, events, event);
 
-SEC("tracepoint/syscalls/sys_enter_chdir")
-int tracepoint__sys_enter_chdir(struct trace_event_raw_sys_enter *ctx) {
+SEC("tracepoint/syscalls/sys_enter_ptrace")
+int tracepoint__sys_enter_ptrace(struct trace_event_raw_sys_enter *ctx) {
   struct event *event;
   __u64 pid_tgid = bpf_get_current_pid_tgid();
 
@@ -42,9 +44,35 @@ int tracepoint__sys_enter_chdir(struct trace_event_raw_sys_enter *ctx) {
   event->pid = pid_tgid >> 32;
   bpf_get_current_comm(&event->comm, sizeof(event->comm));
 
+  __u64 request_num = ctx->args[0];  // 'request' parameter
+
+  switch (request_num) {
+        case 0:
+            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_TRACEME");
+            break;
+        case 1:
+            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_PEEKTEXT");
+            break;
+        case 2:
+            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_PEEKDATA");
+            break;
+        case 3:
+            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_PEEKUSER");
+            break;
+        case 4:
+            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_POKETEXT");
+            break;
+        default:
+            goto end;
+  }
+
+
   /* emit event */
   gadget_submit_buf(ctx, &events, event, sizeof(*event));
+  return 0;
 
+end:
+  gadget_discard_buf(event);
   return 0;
 }
 
