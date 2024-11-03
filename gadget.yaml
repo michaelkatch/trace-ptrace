@@ -1,5 +1,5 @@
-name: 'ptrace'
-description: 'tracing ptrace system calls'
+name: ptrace
+description: tracing ptrace system calls
 homepageURL: 'TODO: Fill the gadget homepage URL'
 documentationURL: 'TODO: Fill the gadget documentation URL'
 sourceURL: 'TODO: Fill the gadget source code URL'
@@ -17,10 +17,10 @@ datasources:
           description: 'TODO: Fill field description'
       request_name:
         annotations:
-          description: 'ptrace request type'
+          description: ptrace request type
       target_pid:
         annotations:
-          description: 'process id of the target process'
+          description: process id of the target process
       timestamp:
         annotations:
           description: 'TODO: Fill field description'
