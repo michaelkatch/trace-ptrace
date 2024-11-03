@@ -16,12 +16,20 @@
 #define TASK_COMM_LEN 16
 #endif
 
+// Macro to handle request name assignment
+#define ASSIGN_PTRACE_REQUEST_NAME(req_num, req_name) \
+    case req_num: \
+        bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), req_name); \
+        break;
+
 struct event {
   gadget_timestamp timestamp;
   gadget_mntns_id mntns_id;
   __u32 pid;
   char comm[TASK_COMM_LEN];
   char request_name[32];         // String representation of ptrace request
+  __u32 target_pid;              // Target process's PID from ptrace
+
 };
 
 
@@ -42,30 +50,20 @@ int tracepoint__sys_enter_ptrace(struct trace_event_raw_sys_enter *ctx) {
   event->timestamp = bpf_ktime_get_boot_ns();
   event->mntns_id = gadget_get_mntns_id();
   event->pid = pid_tgid >> 32;
+  event->target_pid = ctx->args[1];
   bpf_get_current_comm(&event->comm, sizeof(event->comm));
 
   __u64 request_num = ctx->args[0];  // 'request' parameter
 
   switch (request_num) {
-        case 0:
-            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_TRACEME");
-            break;
-        case 1:
-            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_PEEKTEXT");
-            break;
-        case 2:
-            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_PEEKDATA");
-            break;
-        case 3:
-            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_PEEKUSER");
-            break;
-        case 4:
-            bpf_probe_read_kernel_str(&event->request_name, sizeof(event->request_name), "PTRACE_POKETEXT");
-            break;
-        default:
-            goto end;
+    ASSIGN_PTRACE_REQUEST_NAME(0, "PTRACE_TRACEME")
+    ASSIGN_PTRACE_REQUEST_NAME(1, "PTRACE_PEEKTEXT")
+    ASSIGN_PTRACE_REQUEST_NAME(2, "PTRACE_PEEKDATA")
+    ASSIGN_PTRACE_REQUEST_NAME(3, "PTRACE_PEEKUSER")
+    ASSIGN_PTRACE_REQUEST_NAME(4, "PTRACE_POKETEXT")
+    default:
+        goto end;
   }
-
 
   /* emit event */
   gadget_submit_buf(ctx, &events, event, sizeof(*event));
