@@ -34,10 +34,12 @@ GADGET_TRACER(ptrace, events, event);
 
 SEC("tracepoint/syscalls/sys_enter_ptrace")
 int tracepoint__sys_enter_ptrace(struct trace_event_raw_sys_enter *ctx) {
-
   __u64 request_num = ctx->args[0]; // 'request' parameter
-
   if (request_num > 4)
+    return 0;
+
+  __u64 mntns_id = gadget_get_mntns_id();
+  if (gadget_should_discard_mntns_id(mntns_id))
     return 0;
 
   struct event *event;
@@ -47,7 +49,7 @@ int tracepoint__sys_enter_ptrace(struct trace_event_raw_sys_enter *ctx) {
 
   __u64 pid_tgid = bpf_get_current_pid_tgid();
   event->timestamp = bpf_ktime_get_boot_ns();
-  event->mntns_id = gadget_get_mntns_id();
+  event->mntns_id = mntns_id;
   event->pid = pid_tgid >> 32;
   event->target_pid = ctx->args[1];
   bpf_get_current_comm(&event->comm, sizeof(event->comm));
